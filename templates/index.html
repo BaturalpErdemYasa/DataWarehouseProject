@@ -1,13 +1,18 @@
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>Akademik Makale Özetleyici</title>
-</head>
-<body>
+  </head>
+  <body>
     <h2>PDF Yükleyin ve Otomatik Özetini İndirin</h2>
     <form method="POST" action="/summarize" enctype="multipart/form-data">
-        <input type="file" name="pdf_file" accept=".pdf" required>
-        <button type="submit">Özetle ve İndir</button>
+      <input type="file" name="pdf_file" accept=".pdf" required />
+      <label for="model_choice">Model Seçiniz:</label>
+      <select name="model_choice" id="model_choice">
+        <option value="bart">BART (facebook/bart-large-cnn)</option>
+        <option value="t5">T5 (t5-base)</option>
+      </select>
+      <button type="submit">Özetle ve İndir</button>
     </form>
-</body>
+  </body>
 </html>
