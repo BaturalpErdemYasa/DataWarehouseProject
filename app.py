@@ -15,10 +15,13 @@ import nltk
 from bertopic import BERTopic
 from pyvis.network import Network
 from sklearn.feature_extraction.text import CountVectorizer
+from umap import UMAP
+from hdbscan import HDBSCAN
+from sentence_transformers import SentenceTransformer
 
 app = Flask(__name__)
 
-# Model'ları lazy loading ile yükle (isteğe bağlı optimizasyon)
+# Summarization pipeline'ları
 def get_summarizer_bart():
     if not hasattr(get_summarizer_bart, '_instance'):
         get_summarizer_bart._instance = pipeline("summarization", model="facebook/bart-large-cnn")
@@ -29,36 +32,22 @@ def get_summarizer_t5():
         get_summarizer_t5._instance = pipeline("summarization", model="t5-base")
     return get_summarizer_t5._instance
 
-# Ensure NLTK punkt is downloaded (kullanılmıyor ama bırakıldı)
-def ensure_nltk_punkt():
-    try:
-        nltk.data.find('tokenizers/punkt_tab')
-    except LookupError:
-        try:
-            nltk.download('punkt_tab')
-        except:
-            # Fallback to old format
-            nltk.download('punkt')
-
-# PDF'ten metin çıkaran yardımcı fonksiyon
 def extract_text_from_pdf(file_bytes):
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     text = "\n".join(page.get_text() for page in doc)
-    doc.close()  # Bellek sızıntısını önlemek için
+    doc.close()
     return text
 
 def extract_sentences_from_pdf(file_bytes):
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     text = "\n".join(page.get_text() for page in doc)
-    doc.close()  # Bellek sızıntısını önlemek için
+    doc.close()
     
-    # Basit cümle bölme (NLTK olmadan)
     sentences = re.split(r'[.!?]+', text)
     sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
     
     return sentences
 
-# Uzun metni parçalara ayırarak özetleyen fonksiyon
 def summarize_long_text(text, summarizer, chunk_size=1000):
     if not text.strip():
         return "Metin bulunamadı."
@@ -77,16 +66,46 @@ def summarize_long_text(text, summarizer, chunk_size=1000):
 
     return "\n\n".join(summaries) if summaries else "Özet oluşturulamadı."
 
-# İngilizce stopword listesi kullanarak vectorizer oluşturun
-vectorizer_model = CountVectorizer(stop_words="english")
+# Yeni: BERTopic parametreleri
+vectorizer_model = CountVectorizer(
+    stop_words="english",
+    ngram_range=(1, 2),
+    max_features=3000
+)
 
-# BERTopic ile konu başlıklarını çıkaran fonksiyon
+umap_model = UMAP(
+    n_neighbors=5,
+    n_components=2,
+    min_dist=0.0,
+    metric='cosine'
+)
+
+hdbscan_model = HDBSCAN(
+    min_cluster_size=2,
+    min_samples=1,
+    cluster_selection_method='eom'
+)
+
+embedding_model = SentenceTransformer("paraphrase-MiniLM-L12-v2")
+
+# BERTopic modeli (önceden tanımlı)
+topic_model = BERTopic(
+    language="english",
+    embedding_model=embedding_model,
+    vectorizer_model=vectorizer_model,
+    umap_model=umap_model,
+    hdbscan_model=hdbscan_model,
+    min_topic_size=2,
+    nr_topics=5,
+    calculate_probabilities=False,
+    verbose=True
+)
+
 def extract_topics_with_bertopic(sentences):
     try:
         if not sentences or len(sentences) < 5:
             raise ValueError("En az 5 cümle gerekli.")
         
-        # Boş cümleleri ve çok kısa cümleleri filtrele
         valid_sentences = [s for s in sentences if s.strip() and len(s.strip()) > 20]
         
         if len(valid_sentences) < 5:
@@ -94,30 +113,18 @@ def extract_topics_with_bertopic(sentences):
         
         print(f"Analiz edilecek cümle sayısı: {len(valid_sentences)}")
         
-        # BERTopic parametrelerini optimize et ve vectorizer_model ekle
-        topic_model = BERTopic(
-            language="multilingual",
-            verbose=False,
-            min_topic_size=2,  # Minimum konu boyutu
-            nr_topics=10,      # Maksimum konu sayısı
-            calculate_probabilities=False,  # Performans için
-            vectorizer_model=vectorizer_model
-        )
-        
         topics, probabilities = topic_model.fit_transform(valid_sentences)
         
-        # Konu sayısını kontrol et
         unique_topics = set(topics)
         print(f"Bulunan konu sayısı: {len(unique_topics)}")
         
-        if len(unique_topics) <= 1:  # Sadece -1 (outlier) varsa
+        if len(unique_topics) <= 1:
             raise ValueError("Anlamlı konu bulunamadı.")
         
         return topic_model, topics
     except Exception as e:
         raise Exception(f"Konu analizi hatası: {str(e)}")
 
-# Pyvis ile konu başlıklarını görselleştiren fonksiyon
 def visualize_topics_with_pyvis(topic_model):
     try:
         net = Network(
@@ -133,9 +140,8 @@ def visualize_topics_with_pyvis(topic_model):
             raise ValueError("Görselleştirilebilir konu bulunamadı.")
         
         for topic_num, topic_words in valid_topics.items():
-            # Konu başlığını en önemli 3 kelimenin birleşimi olarak oluştur
             top_words = [word for word, score in topic_words[:3]]
-            topic_label = " ".join(top_words).title()  # Başlık büyük harfle
+            topic_label = " ".join(top_words).title()
             
             net.add_node(f"topic_{topic_num}", label=topic_label, color="#4e79a7", size=30)
             
@@ -166,57 +172,8 @@ def visualize_topics_with_pyvis(topic_model):
             raise ValueError("HTML dosyası oluşturulamadı.")
         return html_path
     except Exception as e:
-        print(f"Görselleştirme detay hatası: {str(e)}")
         raise Exception(f"Görselleştirme hatası: {str(e)}")
 
-# Ana sayfa
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-# Dosya yüklendiğinde özetleme
-@app.route('/summarize', methods=['POST'])
-def summarize():
-    try:
-        uploaded_file = request.files.get('pdf_file')
-        if not uploaded_file or not uploaded_file.filename:
-            return "Dosya seçilmedi.", 400
-        
-        if not uploaded_file.filename.lower().endswith('.pdf'):
-            return "Geçersiz dosya formatı. Lütfen PDF yükleyin.", 400
-        
-        model_choice = request.form.get('model_choice', 'bart')
-        
-        # Dosyayı bir kez oku
-        file_bytes = uploaded_file.read()
-        text = extract_text_from_pdf(file_bytes)
-        
-        if not text.strip():
-            return "PDF'den metin çıkarılamadı.", 400
-        
-        # Model seçimine göre özetleme
-        if model_choice == 't5':
-            summarizer = get_summarizer_t5()
-        else:
-            summarizer = get_summarizer_bart()
-        
-        summary = summarize_long_text(text, summarizer)
-        
-        # Geçici dosyaya yaz
-        temp = tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w", encoding="utf-8")
-        temp.write(summary)
-        temp.close()
-        
-        return send_file(temp.name, as_attachment=True, download_name="ozet.txt")
-    
-    except Exception as e:
-        return f"Hata oluştu: {str(e)}", 500
-
-# Dosya kontrolü fonksiyonu
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'pdf'
-
-# Alternatif basit HTML görselleştirme fonksiyonu
 def create_simple_topic_html(topic_model):
     try:
         topics_dict = topic_model.get_topics()
@@ -246,7 +203,7 @@ def create_simple_topic_html(topic_model):
         
         for topic_num, words in valid_topics.items():
             html_content += f'<div class="topic"><h3>Konu {topic_num}</h3><div class="words">'
-            for word, score in words[:5]:  # İlk 5 kelime
+            for word, score in words[:5]:
                 html_content += f'<span class="word">{word} <span class="score">({score:.3f})</span></span>'
             html_content += '</div></div>'
         
@@ -263,7 +220,46 @@ def create_simple_topic_html(topic_model):
     except Exception as e:
         raise Exception(f"Basit HTML oluşturma hatası: {str(e)}")
 
-# Konu başlıklarını çıkarıp görselleştiren route
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/summarize', methods=['POST'])
+def summarize():
+    try:
+        uploaded_file = request.files.get('pdf_file')
+        if not uploaded_file or not uploaded_file.filename:
+            return "Dosya seçilmedi.", 400
+        
+        if not uploaded_file.filename.lower().endswith('.pdf'):
+            return "Geçersiz dosya formatı. Lütfen PDF yükleyin.", 400
+        
+        model_choice = request.form.get('model_choice', 'bart')
+        file_bytes = uploaded_file.read()
+        text = extract_text_from_pdf(file_bytes)
+        
+        if not text.strip():
+            return "PDF'den metin çıkarılamadı.", 400
+        
+        if model_choice == 't5':
+            summarizer = get_summarizer_t5()
+        else:
+            summarizer = get_summarizer_bart()
+        
+        summary = summarize_long_text(text, summarizer)
+        
+        temp = tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode="w", encoding="utf-8")
+        temp.write(summary)
+        temp.close()
+        
+        return send_file(temp.name, as_attachment=True, download_name="ozet.txt")
+    
+    except Exception as e:
+        return f"Hata oluştu: {str(e)}", 500
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'pdf'
+
 @app.route('/topics', methods=['POST'])
 def topics():
     try:
@@ -274,7 +270,6 @@ def topics():
         if not allowed_file(uploaded_file.filename):
             return "Geçersiz dosya formatı. Lütfen PDF yükleyin.", 400
         
-        # Dosyayı bir kez oku
         file_bytes = uploaded_file.read()
         sentences = extract_sentences_from_pdf(file_bytes)
         
@@ -283,15 +278,13 @@ def topics():
         
         print(f"Toplam cümle sayısı: {len(sentences)}")
         
-        topic_model, topics = extract_topics_with_bertopic(sentences)
+        topic_model_result, topics = extract_topics_with_bertopic(sentences)
         
         try:
-            # Önce Pyvis ile dene
-            html_path = visualize_topics_with_pyvis(topic_model)
+            html_path = visualize_topics_with_pyvis(topic_model_result)
         except Exception as pyvis_error:
             print(f"Pyvis hatası: {pyvis_error}")
-            # Pyvis başarısız olursa basit HTML kullan
-            html_path = create_simple_topic_html(topic_model)
+            html_path = create_simple_topic_html(topic_model_result)
         
         return send_file(html_path, as_attachment=True, download_name="konu_gorseli.html")
     
