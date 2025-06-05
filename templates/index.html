@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Akademik Makale Özetleyici</title>
+</head>
+<body>
+    <h2>PDF Yükleyin ve Otomatik Özetini İndirin</h2>
+    <form method="POST" action="/summarize" enctype="multipart/form-data">
+        <input type="file" name="pdf_file" accept=".pdf" required>
+        <button type="submit">Özetle ve İndir</button>
+    </form>
+</body>
+</html>
