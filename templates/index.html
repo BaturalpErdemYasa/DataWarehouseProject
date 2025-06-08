@@ -1,18 +1,591 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Akademik Makale Özetleyici</title>
+    <title>Academic Article Summarizer & Topic Analyzer</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        position: relative;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000"><defs><radialGradient id="a" cx="50%" cy="50%"><stop offset="0%" stop-color="rgba(255,255,255,0.1)"/><stop offset="100%" stop-color="rgba(255,255,255,0)"/></radialGradient></defs><circle cx="200" cy="200" r="100" fill="url(%23a)"/><circle cx="800" cy="300" r="150" fill="url(%23a)"/><circle cx="400" cy="700" r="120" fill="url(%23a)"/><circle cx="900" cy="800" r="80" fill="url(%23a)"/></svg>')
+          no-repeat center center;
+        background-size: cover;
+        pointer-events: none;
+      }
+
+      .container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        padding: 40px;
+        border-radius: 24px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15),
+          0 0 0 1px rgba(255, 255, 255, 0.1);
+        max-width: 500px;
+        width: 100%;
+        position: relative;
+        transform: translateY(0);
+        animation: slideInUp 0.8s ease-out;
+      }
+
+      @keyframes slideInUp {
+        from {
+          opacity: 0;
+          transform: translateY(30px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      h1 {
+        color: #2d3748;
+        text-align: center;
+        margin-bottom: 40px;
+        font-size: 28px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        position: relative;
+      }
+
+      h1::after {
+        content: "";
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 2px;
+      }
+
+      .form-group {
+        margin-bottom: 30px;
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #4a5568;
+        font-size: 15px;
+      }
+
+      .file-upload-wrapper {
+        position: relative;
+        overflow: hidden;
+        border: 2px dashed #cbd5e0;
+        border-radius: 16px;
+        background: linear-gradient(145deg, #f8fafc, #edf2f7);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+      }
+
+      .file-upload-wrapper:hover {
+        border-color: #667eea;
+        background: linear-gradient(145deg, #f0f4ff, #e6f0ff);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.15);
+      }
+
+      .file-upload-wrapper.has-file {
+        border-color: #48bb78;
+        background: linear-gradient(145deg, #f0fff4, #e6fffa);
+      }
+
+      input[type="file"] {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+      }
+
+      .file-upload-content {
+        padding: 30px 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+      }
+
+      .file-upload-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+        color: #a0aec0;
+        transition: all 0.3s ease;
+      }
+
+      .file-upload-wrapper:hover .file-upload-icon {
+        color: #667eea;
+        transform: scale(1.1);
+      }
+
+      .file-upload-text {
+        color: #718096;
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+
+      .file-upload-subtext {
+        color: #a0aec0;
+        font-size: 13px;
+      }
+
+      select {
+        width: 100%;
+        padding: 16px 20px;
+        border: 2px solid #e2e8f0;
+        border-radius: 16px;
+        background: linear-gradient(145deg, #ffffff, #f8fafc);
+        font-size: 15px;
+        color: #4a5568;
+        font-weight: 500;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        appearance: none;
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23a0aec0" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
+        background-repeat: no-repeat;
+        background-position: right 16px center;
+        background-size: 20px;
+      }
+
+      select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        transform: translateY(-1px);
+      }
+
+      .button-group {
+        display: flex;
+        gap: 16px;
+        margin-top: 35px;
+      }
+
+      button {
+        flex: 1;
+        padding: 18px 24px;
+        border: none;
+        border-radius: 16px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        text-transform: none;
+      }
+
+      button::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.3),
+          transparent
+        );
+        transition: left 0.6s;
+      }
+
+      button:hover::before {
+        left: 100%;
+      }
+
+      .btn-summarize {
+        background: linear-gradient(135deg, #48bb78, #38a169);
+        color: white;
+        box-shadow: 0 4px 15px rgba(72, 187, 120, 0.4);
+      }
+
+      .btn-summarize:hover:not(:disabled) {
+        background: linear-gradient(135deg, #38a169, #2f855a);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(72, 187, 120, 0.6);
+      }
+
+      .btn-topics {
+        background: linear-gradient(135deg, #4299e1, #3182ce);
+        color: white;
+        box-shadow: 0 4px 15px rgba(66, 153, 225, 0.4);
+      }
+
+      .btn-topics:hover:not(:disabled) {
+        background: linear-gradient(135deg, #3182ce, #2c5282);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(66, 153, 225, 0.6);
+      }
+
+      button:disabled {
+        background: linear-gradient(135deg, #e2e8f0, #cbd5e0);
+        color: #a0aec0;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      button:disabled::before {
+        display: none;
+      }
+
+      .file-info {
+        margin-top: 20px;
+        padding: 20px;
+        background: linear-gradient(135deg, #f0fff4, #c6f6d5);
+        border: 2px solid #9ae6b4;
+        border-radius: 16px;
+        display: none;
+        font-size: 14px;
+        color: #2f855a;
+        font-weight: 500;
+        animation: fadeInUp 0.5s ease-out;
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .loading {
+        display: none;
+        text-align: center;
+        margin-top: 30px;
+        color: #718096;
+      }
+
+      .loading-text {
+        margin-top: 15px;
+        font-weight: 500;
+      }
+
+      .spinner {
+        border: 4px solid #e2e8f0;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (max-width: 480px) {
+        .container {
+          padding: 30px 25px;
+          margin: 10px;
+        }
+
+        h1 {
+          font-size: 24px;
+        }
+
+        .button-group {
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        button {
+          padding: 16px 20px;
+        }
+      }
+
+      .floating-shapes {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      .shape {
+        position: absolute;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        animation: float 20s infinite linear;
+      }
+
+      .shape:nth-child(1) {
+        width: 80px;
+        height: 80px;
+        left: 10%;
+        animation-delay: 0s;
+      }
+
+      .shape:nth-child(2) {
+        width: 120px;
+        height: 120px;
+        left: 80%;
+        animation-delay: 7s;
+      }
+
+      .shape:nth-child(3) {
+        width: 60px;
+        height: 60px;
+        left: 50%;
+        animation-delay: 15s;
+      }
+
+      @keyframes float {
+        0% {
+          transform: translateY(100vh) rotate(0deg);
+          opacity: 0;
+        }
+        10% {
+          opacity: 1;
+        }
+        90% {
+          opacity: 1;
+        }
+        100% {
+          transform: translateY(-100px) rotate(360deg);
+          opacity: 0;
+        }
+      }
+    </style>
   </head>
   <body>
-    <h2>PDF Yükleyin ve Otomatik Özetini İndirin</h2>
-    <form method="POST" action="/summarize" enctype="multipart/form-data">
-      <input type="file" name="pdf_file" accept=".pdf" required />
-      <label for="model_choice">Model Seçiniz:</label>
-      <select name="model_choice" id="model_choice">
-        <option value="bart">BART (facebook/bart-large-cnn)</option>
-        <option value="t5">T5 (t5-base)</option>
-      </select>
-      <button type="submit">Özetle ve İndir</button>
-    </form>
+    <div class="floating-shapes">
+      <div class="shape"></div>
+      <div class="shape"></div>
+      <div class="shape"></div>
+    </div>
+
+    <div class="container">
+      <h1>📄 PDF Analysis System</h1>
+
+      <form id="pdfForm" method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+          <label for="pdf_file">Select PDF File:</label>
+          <div class="file-upload-wrapper" id="fileUploadWrapper">
+            <input
+              type="file"
+              name="pdf_file"
+              id="pdf_file"
+              accept=".pdf"
+              required
+            />
+            <div class="file-upload-content">
+              <div class="file-upload-icon">📁</div>
+              <div class="file-upload-text">Select or drag a PDF file</div>
+              <div class="file-upload-subtext">Maximum file size: 50MB</div>
+            </div>
+          </div>
+          <div id="fileInfo" class="file-info"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="model_choice">Summarization Model:</label>
+          <select name="model_choice" id="model_choice">
+            <option value="bart">
+              BART (facebook/bart-large-cnn) - More detailed summaries
+            </option>
+            <option value="t5">T5 (t5-base) - Faster processing</option>
+          </select>
+        </div>
+
+        <div class="button-group">
+          <button
+            type="submit"
+            class="btn-summarize"
+            formaction="/summarize"
+            id="summarizeBtn"
+          >
+            📝 Summarize & Download
+          </button>
+          <button
+            type="submit"
+            class="btn-topics"
+            formaction="/topics"
+            id="topicsBtn"
+          >
+            📊 Analyze Topics
+          </button>
+        </div>
+      </form>
+
+      <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <div class="loading-text">Processing, please wait...</div>
+      </div>
+    </div>
+
+    <script>
+      const fileInput = document.getElementById("pdf_file");
+      const fileInfo = document.getElementById("fileInfo");
+      const fileUploadWrapper = document.getElementById("fileUploadWrapper");
+      const form = document.getElementById("pdfForm");
+      const loading = document.getElementById("loading");
+      const buttons = document.querySelectorAll('button[type="submit"]');
+
+      fileInput.addEventListener("change", function (e) {
+        const file = e.target.files[0];
+        if (file) {
+          const sizeInMB = (file.size / 1024 / 1024).toFixed(2);
+          fileInfo.innerHTML = `
+                    <strong>✅ Selected file:</strong> ${file.name}<br>
+                    <strong>📊 Size:</strong> ${sizeInMB} MB
+                `;
+          fileInfo.style.display = "block";
+          fileUploadWrapper.classList.add("has-file");
+
+          // Update upload content
+          const uploadContent = fileUploadWrapper.querySelector(
+            ".file-upload-content"
+          );
+          uploadContent.innerHTML = `
+                    <div class="file-upload-icon">✅</div>
+                    <div class="file-upload-text">${file.name}</div>
+                    <div class="file-upload-subtext">${sizeInMB} MB - File ready</div>
+                `;
+
+          buttons.forEach((btn) => {
+            btn.disabled = false;
+          });
+        } else {
+          fileInfo.style.display = "none";
+          fileUploadWrapper.classList.remove("has-file");
+
+          // Reset upload content
+          const uploadContent = fileUploadWrapper.querySelector(
+            ".file-upload-content"
+          );
+          uploadContent.innerHTML = `
+                    <div class="file-upload-icon">📁</div>
+                    <div class="file-upload-text">Select or drag a PDF file</div>
+                    <div class="file-upload-subtext">Maximum file size: 50MB</div>
+                `;
+
+          buttons.forEach((btn) => {
+            btn.disabled = true;
+          });
+        }
+      });
+
+      // Drag and drop functionality
+      ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+        fileUploadWrapper.addEventListener(eventName, preventDefaults, false);
+      });
+
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        fileUploadWrapper.addEventListener(eventName, highlight, false);
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        fileUploadWrapper.addEventListener(eventName, unhighlight, false);
+      });
+
+      function highlight(e) {
+        fileUploadWrapper.style.borderColor = "#667eea";
+        fileUploadWrapper.style.backgroundColor = "#f0f4ff";
+        fileUploadWrapper.style.transform = "scale(1.02)";
+      }
+
+      function unhighlight(e) {
+        fileUploadWrapper.style.borderColor = "#cbd5e0";
+        fileUploadWrapper.style.backgroundColor = "";
+        fileUploadWrapper.style.transform = "";
+      }
+
+      fileUploadWrapper.addEventListener("drop", handleDrop, false);
+
+      function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0 && files[0].type === "application/pdf") {
+          fileInput.files = files;
+          fileInput.dispatchEvent(new Event("change"));
+        }
+      }
+
+      form.addEventListener("submit", function (e) {
+        const file = fileInput.files[0];
+        if (!file) {
+          e.preventDefault();
+          alert("Please select a PDF file.");
+          return;
+        }
+
+        loading.style.display = "block";
+        buttons.forEach((btn) => {
+          btn.disabled = true;
+        });
+
+        // Simulate processing time
+        setTimeout(() => {
+          loading.style.display = "none";
+
+          const currentFile = fileInput.files[0];
+          if (currentFile) {
+            buttons.forEach((btn) => {
+              btn.disabled = false;
+            });
+          } else {
+            fileInfo.style.display = "none";
+            buttons.forEach((btn) => {
+              btn.disabled = true;
+            });
+          }
+        }, 4000);
+      });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        buttons.forEach((btn) => {
+          btn.disabled = true;
+        });
+      });
+    </script>
   </body>
 </html>
