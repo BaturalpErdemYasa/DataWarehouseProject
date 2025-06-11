@@ -37,6 +37,20 @@ def get_summarizer_t5():
         )
     return get_summarizer_t5._instance
 
+def get_summarizer_distilbart():
+    if not hasattr(get_summarizer_distilbart, '_instance'):
+        get_summarizer_distilbart._instance = pipeline(
+            "summarization", model="sshleifer/distilbart-cnn-12-6", device=0 if torch.cuda.is_available() else -1
+        )
+    return get_summarizer_distilbart._instance
+
+def get_summarizer_t5small():
+    if not hasattr(get_summarizer_t5small, '_instance'):
+        get_summarizer_t5small._instance = pipeline(
+            "summarization", model="t5-small", device=0 if torch.cuda.is_available() else -1
+        )
+    return get_summarizer_t5small._instance
+
 def extract_text_from_pdf(file_bytes):
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     text = "\n".join(page.get_text() for page in doc)
@@ -53,7 +67,7 @@ def extract_sentences_from_pdf(file_bytes):
     
     return sentences
 
-def summarize_long_text(text, summarizer, chunk_size=2000, batch_size=8):
+def summarize_long_text(text, summarizer, chunk_size=2000, batch_size=32):
     """
     Daha hızlı özetleme için:
     - chunk_size artırıldı (2000 karakter)
@@ -262,6 +276,10 @@ def summarize():
         
         if model_choice == 't5':
             summarizer = get_summarizer_t5()
+        elif model_choice == 'distilbart':
+            summarizer = get_summarizer_distilbart()
+        elif model_choice == 't5small':
+            summarizer = get_summarizer_t5small()
         else:
             summarizer = get_summarizer_bart()
         
