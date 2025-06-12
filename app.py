@@ -37,12 +37,6 @@ def get_summarizer_t5():
         )
     return get_summarizer_t5._instance
 
-def get_summarizer_distilbart():
-    if not hasattr(get_summarizer_distilbart, '_instance'):
-        get_summarizer_distilbart._instance = pipeline(
-            "summarization", model="sshleifer/distilbart-cnn-12-6", device=0 if torch.cuda.is_available() else -1
-        )
-    return get_summarizer_distilbart._instance
 
 def get_summarizer_t5small():
     if not hasattr(get_summarizer_t5small, '_instance'):
